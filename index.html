@@ -387,7 +387,7 @@ function openItem(it){
     var g=function(n){return $('[data-name='+n+']',ov).dataset.v;};
     var amt=evalAmt($('[name=amount]',ov).value), date=$('[name=date]',ov).value;
     if(!date){alert('日付を入力してください');return false;}
-    if(amt===null||amt<=0){alert('金額を入力してください（0より大きい数）');return false;}
+    if(amt===null||amt<0){alert('金額を入力してください（0円以上）');return false;}
     var o=isNew?{id:uid()}:it;
     o.type=g('type');o.account=g('account');o.to=o.type==='transfer'?(o.account==='bank'?'sec':'bank'):undefined;
     o.date=date;o.name=$('[name=name]',ov).value.trim();o.amount=amt;o.repeat=g('repeat');
