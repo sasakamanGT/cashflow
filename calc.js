@@ -162,7 +162,7 @@
     var bank = Math.round(base.bank || 0), sec = Math.round(base.sec || 0);
     var cur = { bank: bank, sec: sec };
     var events = [], daily = [{ date: base.date, bank: bank, sec: sec, total: bank + sec }];
-    var depletion = null, below100k = null, i = 0;
+    var depletion = null, below100k = null, bankNeg = null, bankNegAmt = 0, i = 0;
     while (i < ev.length) {
       var d = ev[i].date;
       while (i < ev.length && ev[i].date === d) {
@@ -172,23 +172,20 @@
         e.bank = bank; e.sec = sec; e.total = bank + sec;
         events.push(e); i++;
       }
-      if (d >= T && bank < 0 && sec > 0) {
-        var need = Math.min(-bank, sec);
-        bank += need; sec -= need;
-        events.push({ date: d, kind: 'auto', amount: need, bank: bank, sec: sec, total: bank + sec });
-      }
       daily.push({ date: d, bank: bank, sec: sec, total: bank + sec });
       if (d >= T) {
         if (!below100k && bank + sec < 100000) below100k = d;
         if (!depletion && bank + sec < 0) depletion = d;
+        if (!bankNeg && bank < 0) { bankNeg = d; bankNegAmt = bank; }
       }
     }
     cur.total = cur.bank + cur.sec;
     if (!below100k && cur.total < 100000) below100k = T;
     if (!depletion && cur.total < 0) depletion = T;
+    if (!bankNeg && cur.bank < 0) { bankNeg = T; bankNegAmt = cur.bank; }
     var overdue = events.filter(function (e) { return e.kind === 'plan' && e.overdue; });
     return { base: base, base0: base0, today: T, events: events, daily: daily, current: cur, overdue: overdue,
-      depletion: depletion, below100k: below100k, end: end };
+      depletion: depletion, below100k: below100k, bankNeg: bankNeg, bankNegAmt: bankNegAmt, end: end };
   }
 
   // 指定日の終わり時点の残高（予測込み）
@@ -200,7 +197,7 @@
     return last;
   }
 
-  function level(v) { return v < 0 ? 'neg' : (v < 100000 ? 'warn' : 'ok'); }
+  function level(v) { return v <= 0 ? 'neg' : (v < 100000 ? 'warn' : 'ok'); }
 
   var api = {
     pad: pad, ymd: ymd, parse: parse, toDate: toDate, fromDate: fromDate, addDays: addDays,
