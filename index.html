@@ -106,7 +106,7 @@ h3{font-size:13px;color:var(--text2);margin:10px 0 0;font-weight:600}
 var OWNER='sasakamanGT', REPO='cashflow-data', FILE='data.json';
 var ACC={bank:'銀行',sec:'証券'};
 var data=null, sha=null, sim=null;
-var view={range:'future', months:12};
+var view={range:'future', months:12, line:'bank'};
 var coarse = window.matchMedia && matchMedia('(pointer:coarse)').matches;
 var $=function(s,el){return (el||document).querySelector(s);};
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -200,7 +200,7 @@ function render(){
     sim.overdue.forEach(function(e){h+=rowHtml(e,true);});
   }
   // グラフ
-  h+='<div class="sec"><div class="chartbox"><div class="chart-top"><span class="legend"><span><i style="background:var(--bank)"></i>銀行</span><span><i style="background:var(--total)"></i>合計</span></span>'+
+  h+='<div class="sec"><div class="chartbox"><div class="chart-top"><span class="seg"><button data-line="bank" class="'+(view.line==='bank'?'on':'')+'">銀行のみ</button><button data-line="total" class="'+(view.line==='total'?'on':'')+'">合計</button></span>'+
     '<span class="seg"><button data-range="future" class="'+(view.range==='future'?'on':'')+'">今日から未来</button><button data-range="all" class="'+(view.range==='all'?'on':'')+'">全期間</button></span></div>'+
     '<div id="chart"></div><div id="tip">グラフをタップすると、その日の残高を表示します（確認待ちは今日に計上）</div></div></div>';
   // 月末残高
@@ -223,6 +223,7 @@ function render(){
   m.innerHTML=h;
   m.querySelectorAll('[data-bal]').forEach(function(el){el.onclick=function(){openBalance();};});
   m.querySelectorAll('[data-range]').forEach(function(el){el.onclick=function(){view.range=el.dataset.range;render();};});
+  m.querySelectorAll('[data-line]').forEach(function(el){el.onclick=function(){view.line=el.dataset.line;render();};});
   m.querySelectorAll('.row[data-k]').forEach(function(el){el.onclick=function(){
     var e=sim.events.filter(function(x){return x.key===el.dataset.k&&x.kind===el.dataset.kind;})[0];
     if(!e)return; if(e.kind==='actual')openActual(e.key); else openConfirm(e);
@@ -259,7 +260,8 @@ function drawChart(){
   if(past.length) past.push({date:sim.base.date,bank:sim.base.bank,total:sim.base.bank+sim.base.sec});
   var all=past.concat(fut);
   var x0=CF.toDate(all[0].date).getTime(), x1=CF.toDate(end).getTime(); if(x1<=x0)x1=x0+864e5;
-  var vmin=0,vmax=100000; all.forEach(function(p){vmin=Math.min(vmin,p.bank,p.total);vmax=Math.max(vmax,p.bank,p.total);});
+  var K=view.line, COL=K==='bank'?'var(--bank)':'var(--total)';
+  var vmin=0,vmax=100000; all.forEach(function(p){vmin=Math.min(vmin,p[K]);vmax=Math.max(vmax,p[K]);});
   vmax*=1.08; if(vmin<0)vmin*=1.1;
   var W=340,H=170,L=38,R=6,T=8,B=20;
   function X(s){return L+(CF.toDate(s).getTime()-x0)/(x1-x0)*(W-L-R);}
@@ -273,10 +275,10 @@ function drawChart(){
   if(Y(100000)<Y(0)-10&&Y(100000)>T+14) s+='<text x="'+(L-3)+'" y="'+(Y(100000)+3)+'" text-anchor="end">10万</text>';
   if(vmin<0) s+='<text x="'+(L-3)+'" y="'+(Y(vmin)+3)+'" text-anchor="end">'+lab(vmin/1.1)+'</text>';
   if(view.range==='all'&&t>=all[0].date&&t<=end) s+='<line x1="'+X(t)+'" x2="'+X(t)+'" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--muted)" stroke-width=".6"/><text x="'+(X(t)+2)+'" y="'+(T+8)+'">今日</text>';
-  if(sim.depletion&&sim.depletion<=end) s+='<line x1="'+X(sim.depletion)+'" x2="'+X(sim.depletion)+'" y1="'+T+'" y2="'+(H-B)+'" stroke="#e24b4a" stroke-width=".8"/>';
-  if(past.length>1){s+='<path d="'+path(past,'bank')+'" fill="none" stroke="var(--bank)" stroke-width="1.5"/><path d="'+path(past,'total')+'" fill="none" stroke="var(--total)" stroke-width="2"/>';}
+  if(K==='total'&&sim.depletion&&sim.depletion<=end) s+='<line x1="'+X(sim.depletion)+'" x2="'+X(sim.depletion)+'" y1="'+T+'" y2="'+(H-B)+'" stroke="#e24b4a" stroke-width=".8"/>';
+  if(past.length>1){s+='<path d="'+path(past,K)+'" fill="none" stroke="'+COL+'" stroke-width="2"/>';}
   var dash=view.range==='all'?' stroke-dasharray="4 2"':'';
-  s+='<path d="'+path(fut,'bank')+'" fill="none" stroke="var(--bank)" stroke-width="1.5"'+dash+'/><path d="'+path(fut,'total')+'" fill="none" stroke="var(--total)" stroke-width="2"'+dash+'/>';
+  s+='<path d="'+path(fut,K)+'" fill="none" stroke="'+COL+'" stroke-width="2"'+dash+'/>';
   var a=CF.parse(all[0].date),z=CF.parse(end);
   s+='<text x="'+L+'" y="'+(H-5)+'">'+a.y+'/'+a.m+'</text><text x="'+(W-R)+'" y="'+(H-5)+'" text-anchor="end">'+z.y+'/'+z.m+'</text>';
   s+='<line id="cur" x1="0" x2="0" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--accent)" stroke-width=".8" visibility="hidden"/></svg>';
@@ -289,7 +291,7 @@ function drawChart(){
     all.forEach(function(q){if(q.date<=d)p=q;});
     if(!p)return;
     var c=$('#cur');c.setAttribute('x1',px);c.setAttribute('x2',px);c.setAttribute('visibility','visible');
-    $('#tip').innerHTML=jd(d)+'　銀行 <b class="'+lvCls(p.bank)+'">'+yen(p.bank)+'</b>　合計 <b class="'+lvCls(p.total)+'">'+yen(p.total)+'</b>'+(d>t?'（予測）':'');
+    $('#tip').innerHTML=jd(d)+'　'+(K==='bank'?'銀行':'合計')+' <b class="'+lvCls(p[K])+'">'+yen(p[K])+'</b>'+(d>t?'（予測）':'');
   }
   svg.addEventListener('pointerdown',pick);svg.addEventListener('pointermove',function(e){if(e.buttons||e.pointerType==='mouse')pick(e);});
 }
