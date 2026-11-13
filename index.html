@@ -80,6 +80,14 @@ input.amt.active{border:2px solid var(--accent)}
 .lrow{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .lrow .x{font-size:12px;color:var(--text2)}
 h3{font-size:13px;color:var(--text2);margin:10px 0 0;font-weight:600}
+.phead{padding:8px 16px;font-size:13px;font-weight:600;color:var(--warn);background:var(--warn-bg);border-top:1px solid var(--warn-line);border-bottom:1px solid var(--warn-line)}
+.row.pend{background:var(--warn-bg)}.row.pend .d{color:var(--warn)}
+.row.done .d{color:var(--ok)}
+.tag.done{background:transparent;color:var(--ok);border:1px solid var(--ok)}
+.tag.plan{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.amtrow{display:flex;gap:6px}.amtrow input{flex:1}.kpbtn{border:1px solid var(--line);background:var(--card);color:var(--text2);border-radius:8px;padding:0 10px;font-size:13px;cursor:pointer}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.info{background:var(--sub);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text2)}
 </style>
 </head>
 <body>
@@ -120,7 +128,7 @@ function api(method,body){
     headers:{'Authorization':'Bearer '+token(),'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},
     body:body?JSON.stringify(body):undefined});
 }
-function emptyData(){return {version:1,balances:[],items:[]};}
+function emptyData(){return {version:1,balances:[],items:[],marks:{}};}
 function load(){
   if(!token()){openSettings(true);return;}
   setStatus('読込中…');
@@ -130,7 +138,7 @@ function load(){
     if(!r.ok) throw new Error('読み込みに失敗しました（'+r.status+'）');
     return r.json().then(function(j){data=JSON.parse(b64dec(j.content));sha=j.sha;});
   }).then(function(){
-    data.balances=data.balances||[];data.items=data.items||[];
+    data.balances=data.balances||[];data.items=data.items||[];data.marks=data.marks||{};
     try{localStorage.setItem('cf_cache',JSON.stringify(data));}catch(e){}
     setStatus('');render();
   }).catch(function(e){
@@ -170,7 +178,7 @@ function render(){
     $('#firstBal').onclick=function(){openBalance();};
     return;
   }
-  var t=CF.todayStr(), now=CF.balanceAt(sim,t)||sim.daily[0], h='';
+  var t=sim.today, now=sim.current, h='';
   // 枯渇予測
   if(sim.depletion){
     var days=Math.round((CF.toDate(sim.depletion)-CF.toDate(t))/864e5);
@@ -180,16 +188,21 @@ function render(){
   }else{
     h+='<div class="sec"><div class="banner ok"><div class="t">枯渇予測（2口座の合計）</div><div class="b">30年以内に0円にならない見込み</div>'+(sim.below100k?'<div class="s lv-warn">10万円割れ：'+jd(sim.below100k)+'</div>':'')+'</div></div>';
   }
-  // 口座
+  // 口座（実績ベース）
   h+='<div class="sec" style="padding-top:0"><div class="grid3">'+
     '<div class="acc" data-bal><div class="l">銀行</div><div class="v '+lvCls(now.bank)+'">'+yen(now.bank)+'</div></div>'+
     '<div class="acc" data-bal><div class="l">証券</div><div class="v '+lvCls(now.sec)+'">'+yen(now.sec)+'</div></div>'+
     '<div class="acc" data-bal style="background:var(--sub)"><div class="l">合計</div><div class="v '+lvCls(now.total)+'">'+yen(now.total)+'</div></div>'+
-    '</div><div class="note">今日の見込み残高　最終の残高記録：'+md(sim.base.date)+'（タップして実際の残高を記録）</div></div>';
+    '</div><div class="note">現在の残高（確定した実績まで）　最終の残高記録：'+md(sim.base.date)+'（タップして実際の残高を記録）</div></div>';
+  // 確認待ち
+  if(sim.overdue.length){
+    h+='<div class="phead">確認待ち（'+sim.overdue.length+'件）　タップして実績確認</div>';
+    sim.overdue.forEach(function(e){h+=rowHtml(e,true);});
+  }
   // グラフ
-  h+='<div class="sec" style="padding-top:0"><div class="chartbox"><div class="chart-top"><span class="legend"><span><i style="background:var(--bank)"></i>銀行</span><span><i style="background:var(--total)"></i>合計</span></span>'+
+  h+='<div class="sec"><div class="chartbox"><div class="chart-top"><span class="legend"><span><i style="background:var(--bank)"></i>銀行</span><span><i style="background:var(--total)"></i>合計</span></span>'+
     '<span class="seg"><button data-range="future" class="'+(view.range==='future'?'on':'')+'">今日から未来</button><button data-range="all" class="'+(view.range==='all'?'on':'')+'">全期間</button></span></div>'+
-    '<div id="chart"></div><div id="tip">グラフをタップすると、その日の残高を表示します</div></div></div>';
+    '<div id="chart"></div><div id="tip">グラフをタップすると、その日の残高を表示します（確認待ちは今日に計上）</div></div></div>';
   // 月末残高
   h+='<div class="sec" style="padding-top:0"><div class="grid3">';
   for(var i=0;i<3;i++){
@@ -197,29 +210,35 @@ function render(){
     h+='<div class="me '+(lv==='ok'?'':lv)+'"><div class="l">'+CF.parse(me).m+'月末（合計）</div><div class="v">'+yen(b.total)+'</div><div class="s">銀行 <span class="'+lvCls(b.bank)+'">'+yen(b.bank)+'</span></div></div>';
   }
   h+='</div></div>';
-  // 明細
+  // 明細（実績＋予定）
   var until=CF.addMonths(t,view.months), cur='';
-  var ev=sim.events.filter(function(e){return e.date<=until;});
-  if(!ev.length) h+='<div class="empty">予定がありません。右下の＋から追加してください。</div>';
-  ev.forEach(function(e,idx){
+  var ev=sim.events.filter(function(e){return e.date<=until&&!(e.kind==='plan'&&e.overdue);});
+  if(!ev.length&&!sim.overdue.length) h+='<div class="empty">予定がありません。右下の＋から追加してください。</div>';
+  ev.forEach(function(e){
     var mk=e.date.slice(0,7);
     if(mk!==cur){cur=mk;h+='<div class="mhead">'+CF.parse(e.date).y+'年'+CF.parse(e.date).m+'月</div>';}
-    var bal='<div class="bal">銀行 <span class="'+lvCls(e.bank)+'">'+num(e.bank)+'</span>　合計 <span class="'+lvCls(e.total)+'">'+num(e.total)+'</span></div>';
-    if(e.auto){
-      h+='<div class="row auto"><span class="d">'+md(e.date)+'</span><span class="n"><div class="nm">補填（予測） 証券→銀行</div></span><span><div class="a">'+num(e.amount)+'</div>'+bal+'</span></div>';
-    }else{
-      var it=e.item, sign=it.type==='in'?'+':(it.type==='out'?'-':''), cls=it.type==='in'?'plus':'';
-      var tag=it.type==='transfer'?'<span class="tag '+it.account+'">'+ACC[it.account]+'→'+ACC[it.to]+'</span>':'<span class="tag '+it.account+'">'+ACC[it.account]+'</span>';
-      h+='<div class="row" data-id="'+esc(it.id)+'"><span class="d">'+md(e.date)+'</span><span class="n"><div class="nm">'+esc(it.name||'（無題）')+(it.repeat&&it.repeat!=='none'?' ↻':'')+tag+'</div></span><span><div class="a '+cls+'">'+sign+num(it.amount)+'</div>'+bal+'</span></div>';
-    }
+    h+=rowHtml(e,false);
   });
-  if(ev.length && sim.events.some(function(e){return e.date>until;})) h+='<button class="more" id="more">さらに12か月表示</button>';
+  if(sim.events.some(function(e){return e.date>until;})) h+='<button class="more" id="more">さらに12か月表示</button>';
   m.innerHTML=h;
   m.querySelectorAll('[data-bal]').forEach(function(el){el.onclick=function(){openBalance();};});
   m.querySelectorAll('[data-range]').forEach(function(el){el.onclick=function(){view.range=el.dataset.range;render();};});
-  m.querySelectorAll('.row[data-id]').forEach(function(el){el.onclick=function(){openItem(findItem(el.dataset.id));};});
+  m.querySelectorAll('.row[data-k]').forEach(function(el){el.onclick=function(){
+    var e=sim.events.filter(function(x){return x.key===el.dataset.k&&x.kind===el.dataset.kind;})[0];
+    if(!e)return; if(e.kind==='actual')openActual(e.key); else openConfirm(e);
+  };});
   if($('#more'))$('#more').onclick=function(){view.months+=12;render();};
   drawChart();
+}
+function rowHtml(e,pend){
+  var bal='<div class="bal">銀行 <span class="'+lvCls(e.bank)+'">'+num(e.bank)+'</span>　合計 <span class="'+lvCls(e.total)+'">'+num(e.total)+'</span></div>';
+  if(e.kind==='auto') return '<div class="row auto"><span class="d">'+md(e.date)+'</span><span class="n"><div class="nm">補填（予測） 証券→銀行</div></span><span><div class="a">'+num(e.amount)+'</div>'+bal+'</span></div>';
+  var src=e.kind==='actual'?e.mark:e.item, sign=src.type==='in'?'+':(src.type==='out'?'-':''), cls=src.type==='in'?'plus':'';
+  var tag=src.type==='transfer'?'<span class="tag '+src.account+'">'+ACC[src.account]+'→'+ACC[src.to]+'</span>':'<span class="tag '+src.account+'">'+ACC[src.account]+'</span>';
+  var st=e.kind==='actual'?'<span class="tag done">実績</span>':(pend?'':'<span class="tag plan">予定</span>');
+  var rep=e.kind==='plan'&&e.item.repeat&&e.item.repeat!=='none'?' ↻':'';
+  var d=pend?md(e.sched):md(e.date);
+  return '<div class="row '+(pend?'pend':(e.kind==='actual'?'done':''))+'" data-k="'+esc(e.key)+'" data-kind="'+e.kind+'"><span class="d">'+d+'</span><span class="n"><div class="nm">'+(e.kind==='actual'?'✓ ':'')+esc(src.name||'（無題）')+rep+tag+st+'</div></span><span><div class="a '+cls+'">'+sign+num(e.amount)+'</div>'+(pend?'':bal)+'</span></div>';
 }
 function findItem(id){return data.items.filter(function(x){return String(x.id)===String(id);})[0];}
 
@@ -289,7 +308,7 @@ function evalAmt(str){
   return ok?total:null;
 }
 function bindAmt(input){
-  var out=input.nextElementSibling;
+  var out=input.closest('div').parentNode.querySelector('.amtv');
   function upd(){var v=evalAmt(input.value);out.textContent=(v!==null&&/[+\-万千]/.test(input.value))?'= '+num(v)+' 円':'';}
   input.addEventListener('input',upd);upd();
   if(coarse){
@@ -297,6 +316,8 @@ function bindAmt(input){
     input.addEventListener('click',function(){showKeypad(input,upd);});
   }else{
     input.setAttribute('inputmode','numeric');
+    var kb=input.parentNode.querySelector('.kpbtn');
+    if(kb)kb.onclick=function(){showKeypad(input,upd);};
   }
 }
 var kpTarget=null;
@@ -342,7 +363,7 @@ function seg(name,opts,val){
   return '<div class="segf" data-name="'+name+'" data-v="'+val+'" style="grid-template-columns:repeat('+opts.length+',1fr)">'+opts.map(function(o){return '<button type="button" data-v="'+o[0]+'" class="'+(o[0]===val?'on':'')+'">'+o[1]+'</button>';}).join('')+'</div>';
 }
 function amtField(label,name,val){
-  return '<div><div class="fl">'+label+'</div><input type="text" class="amt" name="'+name+'" value="'+(val!=null&&val!==''?num(val):'')+'" autocomplete="off"><div class="amtv"></div></div>';
+  return '<div><div class="fl">'+label+'</div><div class="amtrow"><input type="text" class="amt" name="'+name+'" value="'+(val!=null&&val!==''?num(val):'')+'" autocomplete="off">'+(coarse?'':'<button type="button" class="kpbtn">テンキー</button>')+'</div><div class="amtv"></div></div>';
 }
 
 function openItem(it){
@@ -357,6 +378,7 @@ function openItem(it){
     '<div><div class="fl">繰り返し</div>'+seg('repeat',[['none','なし'],['monthly','毎月'],['yearly','毎年']],it.repeat||'none')+'</div>'+
     '<div id="untilBox"><div class="fl">終了日（空欄なら無期限）</div><input type="date" name="until" value="'+(it.until||'')+'"></div>'+
     '<label class="chk"><input type="checkbox" name="shift" '+(it.shift?'checked':'')+'>土日祝・年末年始なら翌営業日にずらす</label>'+
+    (isNew?'<label class="chk" id="actBox"><input type="checkbox" name="act" checked>もう発生済み（実績として確定する）</label>':'')+
     (isNew?'':'<button class="btn dan" id="del">この予定を削除</button>');
   openSheet(isNew?'予定を追加':'予定を編集',body,function(ov){
     var g=function(n){return $('[data-name='+n+']',ov).dataset.v;};
@@ -368,13 +390,20 @@ function openItem(it){
     o.date=date;o.name=$('[name=name]',ov).value.trim();o.amount=amt;o.repeat=g('repeat');
     o.until=o.repeat==='none'?'':$('[name=until]',ov).value;o.shift=$('[name=shift]',ov).checked;
     if(isNew)data.items.push(o);
+    var ab=$('#actBox',ov);
+    if(isNew&&ab&&ab.style.display!=='none'&&$('[name=act]',ov).checked){
+      data.marks[CF.markKey(o,o.date)]={status:'done',date:o.date,amount:o.amount,type:o.type,account:o.account,to:o.to,name:o.name};
+    }
     save((isNew?'add ':'edit ')+o.id);
   },function(ov,close){
     var upd=function(){
       var tp=$('[data-name=type]',ov).dataset.v;
       $('#accLabel',ov).textContent=tp==='transfer'?'出金元（もう一方へ移す）':'口座';
       $('#untilBox',ov).style.display=$('[data-name=repeat]',ov).dataset.v==='none'?'none':'';
+      var ab=$('#actBox',ov);
+      if(ab)ab.style.display=($('[data-name=repeat]',ov).dataset.v==='none'&&$('[name=date]',ov).value&&$('[name=date]',ov).value<=CF.todayStr())?'':'none';
     };
+    $('[name=date]',ov).addEventListener('change',upd);
     ov.querySelectorAll('.segf').forEach(function(g){g.addEventListener('change',upd);});upd();
     if($('#del',ov))$('#del',ov).onclick=function(){
       if(!confirm('「'+(it.name||'この予定')+'」を削除しますか？'+(it.repeat!=='none'?'（繰り返し分もすべて消えます）':'')))return;
@@ -384,25 +413,70 @@ function openItem(it){
 }
 
 function openBalance(rec){
-  var t=CF.todayStr(), est=sim?CF.balanceAt(sim,t):null;
+  var t=CF.todayStr(), est=sim?sim.current:null;
   rec=rec||{date:t,bank:est?est.bank:'',sec:est?est.sec:''};
   var isEdit=data.balances.indexOf(rec)>=0;
-  var body='<div class="note" style="margin:0">通帳や証券口座の実際の残高を入力します。その日の入出金は反映済みとして扱い、翌日以降の予定から予測します。</div>'+
+  var body='<div class="note" style="margin:0">通帳や証券口座の実際の残高を入力します。確認待ちの予定は、先に実績確認しておくと差額が正しく出ます。</div>'+
     '<div><div class="fl">日付</div><input type="date" name="date" value="'+rec.date+'"></div>'+
+    '<div class="info" id="ref"></div>'+
     amtField('銀行の残高','bank',rec.bank)+amtField('証券口座の現金','sec',rec.sec)+
     (isEdit?'<button class="btn dan" id="del">この記録を削除</button>':'');
   openSheet('残高を記録',body,function(ov){
     var d=$('[name=date]',ov).value,b=evalAmt($('[name=bank]',ov).value),s=evalAmt($('[name=sec]',ov).value);
     if(!d||b===null||s===null){alert('日付と2つの残高を入力してください（0円なら0）');return false;}
+    var pend=sim?sim.events.filter(function(e){return e.kind==='plan'&&e.sched<=d;}).length:0;
+    if(pend&&!confirm(md(d)+'までに確認待ちの予定が'+pend+'件あります。実際にはもう引き落とされている場合、二重に計算されます。このまま記録しますか？'))return false;
+    var ref=CF.actualAt(data,d), msg='';
     if(isEdit){data.balances=data.balances.filter(function(x){return x!==rec;});}
     data.balances=data.balances.filter(function(x){return x.date!==d;});
     data.balances.push({date:d,bank:b,sec:s});
+    if(ref&&!isEdit&&(ref.bank!==b||ref.sec!==s)) msg='アプリの計算との差額：銀行 '+(b-ref.bank>=0?'+':'')+num(b-ref.bank)+'　証券 '+(s-ref.sec>=0?'+':'')+num(s-ref.sec)+'\n（確認漏れの入出金がないか見直してみてください）';
     save('balance '+d);
+    if(msg)setTimeout(function(){alert(msg);},50);
   },function(ov,close){
+    var refUpd=function(){var d=$('[name=date]',ov).value,r=d?CF.actualAt(data,d):null;
+      $('#ref',ov).innerHTML=r&&!isEdit?'アプリ上の残高（'+md(d)+'時点の実績）<br>銀行 '+yen(r.bank)+'　証券 '+yen(r.sec):'';
+      $('#ref',ov).style.display=$('#ref',ov).innerHTML?'':'none';};
+    $('[name=date]',ov).addEventListener('change',refUpd);refUpd();
     if($('#del',ov))$('#del',ov).onclick=function(){if(!confirm('この残高記録を削除しますか？'))return;data.balances=data.balances.filter(function(x){return x!==rec;});close();save('delete balance');};
   });
 }
 
+function openConfirm(e){
+  var it=e.item, t=CF.todayStr(), sign=it.type==='in'?'入金':it.type==='out'?'出金':'振替';
+  var acc=it.type==='transfer'?ACC[it.account]+'→'+ACC[it.to]:ACC[it.account];
+  var body='<div class="info"><b style="color:var(--text)">'+esc(it.name||'（無題）')+'</b>　'+sign+'・'+acc+'<br>予定日 '+jd(e.sched)+'　予定額 '+num(it.amount)+' 円</div>'+
+    '<div><div class="fl">実際の日付</div><input type="date" name="adate" value="'+(e.sched<=t?e.sched:t)+'"></div>'+
+    amtField('実際の金額','aamt',it.amount)+
+    '<div class="btns"><button class="btn" id="skip">今回はなし</button><button class="btn" id="edit">予定を編集</button></div>'+
+    '<div><div class="fl">延期する場合の新しい予定日</div><div class="amtrow"><input type="date" name="mdate" value="'+CF.addDays(e.sched<t?t:e.sched,7)+'"><button class="kpbtn" id="move">延期</button></div></div>';
+  openSheet('実績確認',body,function(ov){
+    var d=$('[name=adate]',ov).value,a=evalAmt($('[name=aamt]',ov).value);
+    if(!d){alert('実際の日付を入力してください');return false;}
+    if(a===null||a<0){alert('実際の金額を入力してください');return false;}
+    data.marks[e.key]={status:'done',date:d,amount:a,type:it.type,account:it.account,to:it.to,name:it.name,itemId:it.id,raw:e.raw};
+    save('confirm '+e.key);
+  },function(ov,close){
+    $('[data-s]',ov).textContent='確定';
+    $('#skip',ov).onclick=function(){data.marks[e.key]={status:'skip',itemId:it.id,raw:e.raw,name:it.name};close();save('skip '+e.key);};
+    $('#edit',ov).onclick=function(){close();openItem(it);};
+    $('#move',ov).onclick=function(){var d=$('[name=mdate]',ov).value;if(!d)return;data.marks[e.key]={status:'moved',date:d,itemId:it.id,raw:e.raw,name:it.name};close();save('move '+e.key);};
+  });
+}
+function openActual(key){
+  var m=data.marks[key]; if(!m)return;
+  var acc=m.type==='transfer'?ACC[m.account]+'→'+ACC[m.to]:ACC[m.account];
+  var body='<div class="info"><b style="color:var(--text)">✓ '+esc(m.name||'（無題）')+'</b>　'+acc+'</div>'+
+    '<div><div class="fl">実際の日付</div><input type="date" name="adate" value="'+m.date+'"></div>'+amtField('実際の金額','aamt',m.amount)+
+    '<button class="btn dan" id="undo">実績確認を取り消す（予定に戻す）</button>';
+  openSheet('実績を編集',body,function(ov){
+    var d=$('[name=adate]',ov).value,a=evalAmt($('[name=aamt]',ov).value);
+    if(!d||a===null||a<0){alert('日付と金額を入力してください');return false;}
+    m.date=d;m.amount=a;save('edit actual '+key);
+  },function(ov,close){
+    $('#undo',ov).onclick=function(){if(!confirm('この実績を取り消しますか？'+(m.itemId?'（予定に戻ります）':'')))return;delete data.marks[key];close();save('undo '+key);};
+  });
+}
 function openList(){
   var t=CF.todayStr();
   function line(it){
@@ -414,13 +488,16 @@ function openList(){
   var rep=data.items.filter(function(x){return x.repeat&&x.repeat!=='none';});
   var one=data.items.filter(function(x){return !x.repeat||x.repeat==='none';}).sort(function(a,b){return a.date<b.date?1:-1;});
   var bal=data.balances.slice().sort(function(a,b){return a.date<b.date?1:-1;});
+  var mk=Object.keys(data.marks).map(function(k){return {k:k,m:data.marks[k]};}).filter(function(x){return x.m.status==='done';}).sort(function(a,b){return a.m.date<b.m.date?1:-1;}).slice(0,100);
   var body='<h3>繰り返しの予定（'+rep.length+'）</h3><div>'+rep.map(line).join('')+'</div>'+
     '<h3>これからの単発の予定</h3><div>'+one.filter(function(x){return x.date>=t;}).map(line).join('')+'</div>'+
     '<h3>過去の単発の予定</h3><div>'+one.filter(function(x){return x.date<t;}).map(line).join('')+'</div>'+
-    '<h3>残高の記録（実績）</h3><div>'+bal.map(function(b,i){return '<div class="lrow" data-b="'+i+'"><span>'+jd(b.date)+'</span><span class="x">銀行 '+num(b.bank)+'　証券 '+num(b.sec)+'</span></div>';}).join('')+'</div>';
+    '<h3>確定した実績（新しい順）</h3><div>'+mk.map(function(x){var m=x.m,sg=m.type==='in'?'+':m.type==='out'?'-':'';return '<div class="lrow" data-mk="'+esc(x.k)+'"><span>✓ '+esc(m.name||'（無題）')+' <span class="x">'+jd(m.date)+'・'+(m.type==='transfer'?ACC[m.account]+'→'+ACC[m.to]:ACC[m.account])+'</span></span><span>'+sg+num(m.amount)+'</span></div>';}).join('')+'</div>'+
+    '<h3>残高の記録</h3><div>'+bal.map(function(b,i){return '<div class="lrow" data-b="'+i+'"><span>'+jd(b.date)+'</span><span class="x">銀行 '+num(b.bank)+'　証券 '+num(b.sec)+'</span></div>';}).join('')+'</div>';
   openSheet('登録一覧',body,null,function(ov,close){
     ov.querySelectorAll('[data-id]').forEach(function(el){el.onclick=function(){close();openItem(findItem(el.dataset.id));};});
     ov.querySelectorAll('[data-b]').forEach(function(el){el.onclick=function(){close();openBalance(bal[+el.dataset.b]);};});
+    ov.querySelectorAll('[data-mk]').forEach(function(el){el.onclick=function(){close();openActual(el.dataset.mk);};});
   });
 }
 
