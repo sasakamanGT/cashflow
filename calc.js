@@ -104,61 +104,93 @@
     return 0;
   }
 
-  // ---- 予測シミュレーション ----
-  // data: {balances:[{date,bank,sec}], items:[...]}
-  // 残高記録はその日の入出金を反映済みとみなし、翌日以降の予定を適用する
-  function latestBalance(data) {
-    var b = (data.balances || []).slice().sort(function (x, y) { return x.date < y.date ? -1 : 1; });
-    return b.length ? b[b.length - 1] : null;
+  // ---- 予測シミュレーション（実績確認方式） ----
+  // data: {balances:[{date,bank,sec}], items:[...], marks:{"itemId|raw":{status:'done'|'skip'|'moved',date,amount,type,account,to,name}}}
+  // ・残高記録＝その日時点の実際の残高。確定した実績（marks done）は記録日の翌日以降の分だけ加算
+  // ・予定は実績確認するまで口座に反映しない。予定日を過ぎた未確認分は「確認待ち」として今日に計上して予測
+  // ・最初の残高記録日以前の予定は対象外
+  function sortedSnaps(data) {
+    return (data.balances || []).slice().sort(function (x, y) { return x.date < y.date ? -1 : 1; });
+  }
+  function latestBalance(data) { var b = sortedSnaps(data); return b.length ? b[b.length - 1] : null; }
+  function markKey(item, raw) { return item.id + '|' + raw; }
+
+  // 指定日時点の実績残高（その日以前の最新の残高記録＋その後の確定実績）
+  function actualAt(data, date) {
+    var snaps = sortedSnaps(data), s = null;
+    snaps.forEach(function (x) { if (x.date <= date) s = x; });
+    if (!s) return null;
+    var bank = s.bank, sec = s.sec, marks = data.marks || {};
+    Object.keys(marks).forEach(function (k) {
+      var m = marks[k];
+      if (m.status === 'done' && m.date > s.date && m.date <= date) { bank += signed(m, 'bank'); sec += signed(m, 'sec'); }
+    });
+    return { date: date, bank: bank, sec: sec, total: bank + sec, snap: s };
   }
 
   function simulate(data, opts) {
     opts = opts || {};
-    var base = latestBalance(data);
-    if (!base) return null;
-    var maxYears = opts.maxYears || 30;
-    var end = addMonths(base.date, maxYears * 12);
-    var items = data.items || [];
-    var occ = [];
-    items.forEach(function (it) {
-      occurrences(it, addDays(base.date, 1), end).forEach(function (o) { occ.push(o); });
+    var snaps = sortedSnaps(data);
+    if (!snaps.length) return null;
+    var base0 = snaps[0].date, base = snaps[snaps.length - 1];
+    var T = opts.today || todayStr();
+    if (T < base.date) T = base.date;
+    var end = addMonths(T, (opts.maxYears || 30) * 12);
+    var marks = data.marks || {};
+    var ev = [];
+    Object.keys(marks).forEach(function (k) {
+      var m = marks[k];
+      if (m.status === 'done' && m.date > base.date) ev.push({ date: m.date, kind: 'actual', key: k, mark: m, amount: m.amount });
     });
-    occ.sort(function (a, b) {
+    (data.items || []).forEach(function (it) {
+      occurrences(it, addDays(base0, 1), end).forEach(function (o) {
+        var k = markKey(it, o.raw), m = marks[k];
+        if (m && (m.status === 'done' || m.status === 'skip')) return;
+        var eff = (m && m.status === 'moved') ? m.date : o.date;
+        if (eff <= base0) return;
+        var overdue = eff <= T;
+        ev.push({ date: overdue ? T : eff, sched: eff, kind: 'plan', overdue: overdue, key: k, item: it, raw: o.raw, amount: it.amount });
+      });
+    });
+    var rank = function (e) { return e.kind === 'actual' ? 0 : ((e.item.type === 'in') ? 1 : 2); };
+    ev.sort(function (a, b) {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      // 同じ日は入金を先に
-      var oa = a.item.type === 'in' ? 0 : 1, ob = b.item.type === 'in' ? 0 : 1;
-      return oa - ob;
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      return (a.sched || a.date) < (b.sched || b.date) ? -1 : 1;
     });
     var bank = Math.round(base.bank || 0), sec = Math.round(base.sec || 0);
-    var events = [];          // 明細（補填含む）
-    var daily = [{ date: base.date, bank: bank, sec: sec, total: bank + sec }];
-    var depletion = null, below100k = null;
-    if (bank + sec < 100000) below100k = base.date;
-    if (bank + sec < 0) depletion = base.date;
-    var i = 0;
-    while (i < occ.length) {
-      var d = occ[i].date;
-      while (i < occ.length && occ[i].date === d) {
-        var o = occ[i];
-        bank += signed(o.item, 'bank');
-        sec += signed(o.item, 'sec');
-        events.push({ date: d, item: o.item, raw: o.raw, auto: false, bank: bank, sec: sec, total: bank + sec });
-        i++;
+    var cur = { bank: bank, sec: sec };
+    var events = [], daily = [{ date: base.date, bank: bank, sec: sec, total: bank + sec }];
+    var depletion = null, below100k = null, i = 0;
+    while (i < ev.length) {
+      var d = ev[i].date;
+      while (i < ev.length && ev[i].date === d) {
+        var e = ev[i], src = e.kind === 'actual' ? e.mark : e.item;
+        bank += signed(src, 'bank'); sec += signed(src, 'sec');
+        if (e.kind === 'actual' && e.date <= T) { cur.bank += signed(src, 'bank'); cur.sec += signed(src, 'sec'); }
+        e.bank = bank; e.sec = sec; e.total = bank + sec;
+        events.push(e); i++;
       }
-      // 銀行が不足したら証券から自動補填（予測）
-      if (bank < 0 && sec > 0) {
+      if (d >= T && bank < 0 && sec > 0) {
         var need = Math.min(-bank, sec);
         bank += need; sec -= need;
-        events.push({ date: d, auto: true, amount: need, bank: bank, sec: sec, total: bank + sec });
+        events.push({ date: d, kind: 'auto', amount: need, bank: bank, sec: sec, total: bank + sec });
       }
       daily.push({ date: d, bank: bank, sec: sec, total: bank + sec });
-      if (!below100k && bank + sec < 100000) below100k = d;
-      if (!depletion && bank + sec < 0) depletion = d;
+      if (d >= T) {
+        if (!below100k && bank + sec < 100000) below100k = d;
+        if (!depletion && bank + sec < 0) depletion = d;
+      }
     }
-    return { base: base, events: events, daily: daily, depletion: depletion, below100k: below100k, end: end };
+    cur.total = cur.bank + cur.sec;
+    if (!below100k && cur.total < 100000) below100k = T;
+    if (!depletion && cur.total < 0) depletion = T;
+    var overdue = events.filter(function (e) { return e.kind === 'plan' && e.overdue; });
+    return { base: base, base0: base0, today: T, events: events, daily: daily, current: cur, overdue: overdue,
+      depletion: depletion, below100k: below100k, end: end };
   }
 
-  // 指定日の終わり時点の残高
+  // 指定日の終わり時点の残高（予測込み）
   function balanceAt(sim, date) {
     var last = null;
     for (var i = 0; i < sim.daily.length; i++) {
@@ -169,12 +201,12 @@
 
   function level(v) { return v < 0 ? 'neg' : (v < 100000 ? 'warn' : 'ok'); }
 
-  // 実際の金額式評価（テンキー用）：terms = [{sign:1|-1, value:number}]
   var api = {
     pad: pad, ymd: ymd, parse: parse, toDate: toDate, fromDate: fromDate, addDays: addDays,
     addMonths: addMonths, monthEnd: monthEnd, todayStr: todayStr, daysInMonth: daysInMonth,
     holidays: holidays, isBankHoliday: isBankHoliday, nextBusinessDay: nextBusinessDay,
     occurrences: occurrences, simulate: simulate, balanceAt: balanceAt, latestBalance: latestBalance,
+    actualAt: actualAt, markKey: markKey,
     level: level, signed: signed
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
