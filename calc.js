@@ -61,6 +61,7 @@
     return !!holidays(p.y)[s];
   }
   function nextBusinessDay(s) { while (isBankHoliday(s)) s = addDays(s, 1); return s; }
+  function prevBusinessDay(s) { while (isBankHoliday(s)) s = addDays(s, -1); return s; }
 
   // ---- 予定の展開 ----
   // item: {id,type:'in'|'out'|'transfer',account:'bank'|'sec',to,date,name,amount,repeat:'none'|'monthly'|'yearly',until,shift}
@@ -70,7 +71,7 @@
     function push(raw) {
       if (raw < start) return;
       if (item.until && raw > item.until) return;
-      var d = item.shift ? nextBusinessDay(raw) : raw;
+      var d = item.shift === 'prev' ? prevBusinessDay(raw) : (item.shift ? nextBusinessDay(raw) : raw);
       if (d >= from && d <= to) out.push({ date: d, raw: raw, item: item });
     }
     if (!item.repeat || item.repeat === 'none') { push(start); return out; }
@@ -204,7 +205,7 @@
   var api = {
     pad: pad, ymd: ymd, parse: parse, toDate: toDate, fromDate: fromDate, addDays: addDays,
     addMonths: addMonths, monthEnd: monthEnd, todayStr: todayStr, daysInMonth: daysInMonth,
-    holidays: holidays, isBankHoliday: isBankHoliday, nextBusinessDay: nextBusinessDay,
+    holidays: holidays, isBankHoliday: isBankHoliday, nextBusinessDay: nextBusinessDay, prevBusinessDay: prevBusinessDay,
     occurrences: occurrences, simulate: simulate, balanceAt: balanceAt, latestBalance: latestBalance,
     actualAt: actualAt, markKey: markKey,
     level: level, signed: signed
