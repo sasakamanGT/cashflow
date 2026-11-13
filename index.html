@@ -443,7 +443,7 @@ function openConfirm(e){
   var it=e.item, t=CF.todayStr(), sign=it.type==='in'?'入金':it.type==='out'?'出金':'振替';
   var acc=it.type==='transfer'?ACC[it.account]+'→'+ACC[it.to]:ACC[it.account];
   var body='<div class="info"><b style="color:var(--text)">'+esc(it.name||'（無題）')+'</b>　'+sign+'・'+acc+'<br>予定日 '+jd(e.sched)+'　予定額 '+num(it.amount)+' 円</div>'+
-    '<div><div class="fl">実際の日付</div><input type="date" name="adate" value="'+(e.sched<=t?e.sched:t)+'"></div>'+
+    '<div><div class="fl">実際の日付</div><input type="date" name="adate" value="'+e.sched+'"></div>'+
     amtField('実際の金額','aamt',it.amount)+
     '<div class="btns"><button class="btn" id="skip">今回はなし</button><button class="btn" id="edit">予定を編集</button></div>'+
     '<div><div class="fl">延期する場合の新しい予定日</div><div class="amtrow"><input type="date" name="mdate" value="'+CF.addDays(e.sched<t?t:e.sched,7)+'"><button class="kpbtn" id="move">延期</button></div></div>';
