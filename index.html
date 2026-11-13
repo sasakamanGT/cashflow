@@ -180,17 +180,8 @@ function render(){
     return;
   }
   var t=sim.today, now=sim.current, h='';
-  // 枯渇予測
-  if(sim.depletion){
-    var days=Math.round((CF.toDate(sim.depletion)-CF.toDate(t))/864e5);
-    var y=Math.floor(days/365), mo=Math.floor((days%365)/30.44);
-    var left=days<=0?'すでに不足':'あと'+(y?y+'年':'')+(mo||!y?mo+'か月':'');
-    h+='<div class="sec"><div class="banner '+(days<92?'neg':'warn')+'"><div class="t">枯渇予測（2口座の合計）</div><div class="b">'+jd(sim.depletion)+'ごろ 0円</div><div class="s">'+left+(sim.below100k?'　／　10万円割れ：'+jd(sim.below100k):'')+'</div></div></div>';
-  }else{
-    h+='<div class="sec"><div class="banner ok"><div class="t">枯渇予測（2口座の合計）</div><div class="b">30年以内に0円にならない見込み</div>'+(sim.below100k?'<div class="s lv-warn">10万円割れ：'+jd(sim.below100k)+'</div>':'')+'</div></div>';
-  }
   // 口座（実績ベース）
-  h+='<div class="sec" style="padding-top:0"><div class="grid3">'+
+  h+='<div class="sec"><div class="grid3">'+
     '<div class="acc" data-bal><div class="l">銀行</div><div class="v '+lvCls(now.bank)+'">'+yen(now.bank)+'</div></div>'+
     '<div class="acc" data-bal><div class="l">証券</div><div class="v '+lvCls(now.sec)+'">'+yen(now.sec)+'</div></div>'+
     '<div class="acc" data-bal style="background:var(--sub)"><div class="l">合計</div><div class="v '+lvCls(now.total)+'">'+yen(now.total)+'</div></div>'+
@@ -198,8 +189,8 @@ function render(){
   // 月末残高
   h+='<div class="sec" style="padding-top:0"><div class="grid3">';
   for(var i=0;i<3;i++){
-    var me=CF.monthEnd(CF.addMonths(t.slice(0,8)+'01',i)), b=CF.balanceAt(sim,me)||sim.daily[0], lv=CF.level(b.total);
-    h+='<div class="me '+(lv==='ok'?'':lv)+'"><div class="l">'+CF.parse(me).m+'月末（合計）</div><div class="v">'+yen(b.total)+'</div><div class="s">銀行 <span class="'+lvCls(b.bank)+'">'+yen(b.bank)+'</span></div></div>';
+    var me=CF.monthEnd(CF.addMonths(t.slice(0,8)+'01',i)), b=CF.balanceAt(sim,me)||sim.daily[0], lv=CF.level(b.bank);
+    h+='<div class="me '+(lv==='ok'?'':lv)+'"><div class="l">'+CF.parse(me).m+'月末（銀行）</div><div class="v">'+yen(b.bank)+'</div><div class="s">合計 <span class="'+lvCls(b.total)+'">'+yen(b.total)+'</span></div></div>';
   }
   h+='</div></div>';
   // 確認待ち
@@ -246,7 +237,8 @@ function findItem(id){return data.items.filter(function(x){return String(x.id)==
 
 // ---------- グラフ ----------
 function drawChart(K){
-  var t=CF.todayStr(), end=horizonEnd();
+  var t=CF.todayStr(), end=horizonEnd(), stop=(K==='bank'&&sim.bankNeg)?sim.bankNeg:null;
+  if(stop)end=stop;
   var past=[], fut=[];
   if(view.all){
     data.balances.slice().sort(function(a,b){return a.date<b.date?-1:1;}).forEach(function(b){
@@ -257,10 +249,10 @@ function drawChart(K){
   var st=CF.balanceAt(sim,startF)||sim.daily[0];
   fut.push({date:startF,bank:st.bank,total:st.total});
   sim.daily.forEach(function(d){if(d.date>startF&&d.date<=end)fut.push(d);});
-  fut.push({date:end,bank:fut[fut.length-1].bank,total:fut[fut.length-1].total});
+  if(!stop)fut.push({date:end,bank:fut[fut.length-1].bank,total:fut[fut.length-1].total});
   if(past.length) past.push({date:sim.base.date,bank:sim.base.bank,total:sim.base.bank+sim.base.sec});
   var all=past.concat(fut);
-  var x0=CF.toDate(all[0].date).getTime(), x1=CF.toDate(end).getTime(); if(x1<=x0)x1=x0+864e5;
+  var x0=CF.toDate(all[0].date).getTime(), x1=CF.toDate(end).getTime(); if(x1<=x0)x1=x0+864e5; if(stop)x1+=(x1-x0)*0.08;
   var COL=K==='bank'?'var(--bank)':'var(--total)';
   var vmin=0,vmax=100000; all.forEach(function(p){vmin=Math.min(vmin,p[K]);vmax=Math.max(vmax,p[K]);});
   vmax*=1.08; if(vmin<0)vmin*=1.1;
@@ -280,6 +272,7 @@ function drawChart(K){
   if(past.length>1){s+='<path d="'+path(past,K)+'" fill="none" stroke="'+COL+'" stroke-width="2"/>';}
   var dash=view.all?' stroke-dasharray="4 2"':'';
   s+='<path d="'+path(fut,K)+'" fill="none" stroke="'+COL+'" stroke-width="2"'+dash+'/>';
+  if(stop)s+='<circle cx="'+X(stop)+'" cy="'+Y(sim.bankNegAmt)+'" r="3.5" fill="#e24b4a"/><text x="'+(X(stop)-6)+'" y="'+(Y(sim.bankNegAmt)+4)+'" text-anchor="end" style="fill:#e24b4a;font-size:11px">'+md(stop)+' '+num(sim.bankNegAmt)+'</text>';
   var a=CF.parse(all[0].date),z=CF.parse(end);
   s+='<text x="'+L+'" y="'+(H-5)+'">'+a.y+'/'+a.m+'</text><text x="'+(W-R)+'" y="'+(H-5)+'" text-anchor="end">'+z.y+'/'+z.m+'</text>';
   s+='<line id="cur_'+K+'" x1="0" x2="0" y1="'+T+'" y2="'+(H-B)+'" stroke="var(--accent)" stroke-width=".8" visibility="hidden"/></svg>';
