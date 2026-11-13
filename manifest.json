@@ -1,0 +1,12 @@
+{
+  "name": "キャッシュフロー",
+  "short_name": "キャッシュフロー",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f5f2",
+  "theme_color": "#1f6feb",
+  "icons": [
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}
