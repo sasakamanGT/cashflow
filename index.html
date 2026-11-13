@@ -329,7 +329,7 @@ function showKeypad(input,upd){
   input.classList.add('active');kpTarget={input:input,upd:upd};
   if(!kp){
     kp=document.createElement('div');kp.className='kp';
-    var keys=['7','8','9','⌫','4','5','6','万','1','2','3','千','0','00','+','-','C','','','完了'];
+    var keys=['7','8','9','⌫','4','5','6','万','1','2','3','千','0','00','000','+','C','-','','完了'];
     kp.innerHTML=keys.map(function(k){if(!k)return '<span></span>';var c=/^\d+$/.test(k)?'':(k==='完了'?'ok':'f');return '<button type="button" class="'+c+'" data-k="'+k+'">'+(k==='-'?'−':k)+'</button>';}).join('');
     sheet.appendChild(kp);
     kp.addEventListener('click',function(e){
@@ -379,7 +379,7 @@ function openItem(it){
     amtField('金額（例：2万3千、1万+5000）','amount',it.amount)+
     '<div><div class="fl">繰り返し</div>'+seg('repeat',[['none','なし'],['monthly','毎月'],['yearly','毎年']],it.repeat||'none')+'</div>'+
     '<div id="untilBox"><div class="fl">終了日（空欄なら無期限）</div><input type="date" name="until" value="'+(it.until||'')+'"></div>'+
-    '<label class="chk"><input type="checkbox" name="shift" '+(it.shift?'checked':'')+'>土日祝・年末年始なら翌営業日にずらす</label>'+
+    '<div><div class="fl">土日祝・年末年始のとき</div>'+seg('shift',[['none','そのまま'],['prev','前営業日'],['next','翌営業日']],it.shift==='prev'?'prev':(it.shift?'next':'none'))+'</div>'+
     (isNew?'<label class="chk" id="actBox"><input type="checkbox" name="act" checked>もう発生済み（実績として確定する）</label>':'')+
     (isNew?'':'<button class="btn dan" id="del">この予定を削除</button>');
   openSheet(isNew?'予定を追加':'予定を編集',body,function(ov){
@@ -390,7 +390,7 @@ function openItem(it){
     var o=isNew?{id:uid()}:it;
     o.type=g('type');o.account=g('account');o.to=o.type==='transfer'?(o.account==='bank'?'sec':'bank'):undefined;
     o.date=date;o.name=$('[name=name]',ov).value.trim();o.amount=amt;o.repeat=g('repeat');
-    o.until=o.repeat==='none'?'':$('[name=until]',ov).value;o.shift=$('[name=shift]',ov).checked;
+    o.until=o.repeat==='none'?'':$('[name=until]',ov).value;var sv=g('shift');o.shift=sv==='prev'?'prev':(sv==='next');
     if(isNew)data.items.push(o);
     var ab=$('#actBox',ov);
     if(isNew&&ab&&ab.style.display!=='none'&&$('[name=act]',ov).checked){
