@@ -5,14 +5,14 @@ function horizonEnd(){
   if(sim.depletion){var a=CF.addMonths(sim.depletion,2),b=CF.addMonths(t,3);return a>b?a:b;}
   return CF.addMonths(t,24);
 }
-// 3か月先の月末までに銀行がマイナスにならないために必要な振替額
+// 最初に銀行がマイナスになる月を、その月だけ乗り切るのに必要な振替額
 function transferNeed(){
-  var t=sim.today, until=CF.monthEnd(CF.addMonths(t.slice(0,8)+'01',2)), low=null;
-  sim.daily.forEach(function(d){if(d.date>=t&&d.date<=until&&(!low||d.bank<low.bank))low=d;});
-  var c=sim.current;
-  if(!low||c.bank<low.bank)low={date:t,bank:c.bank,sec:c.sec};
-  if(low.bank>=0)return null;
-  return {until:until,date:low.date,need:-low.bank,sec:low.sec};
+  var t=sim.today, c=sim.current, first=c.bank<0?t:sim.bankNeg;
+  if(!first)return null;
+  var me=CF.monthEnd(first), low=c.bank<0?{date:t,bank:c.bank}:null;
+  sim.daily.forEach(function(d){if(d.date>=first&&d.date<=me&&(!low||d.bank<low.bank))low=d;});
+  var end=CF.balanceAt(sim,me)||low;
+  return {first:first,month:CF.parse(first).m,low:low,need:-low.bank,monthEnd:end.bank,sec:c.sec};
 }
 function render(){
   var m=$('#main');
@@ -55,7 +55,7 @@ function render(){
   // グラフ（銀行のみ・合計）
   var need=transferNeed();
   h+='<div class="sec"><div class="chartbox"><div class="chart-top"><span class="ctitle">銀行のみ</span><label class="chk" style="font-size:12px">全期間 <input type="checkbox" id="allChk" '+(view.all?'checked':'')+'></label></div>'+
-    (need?'<div class="need">'+md(need.until)+'までマイナスにしないには、証券から <b>'+num(need.need)+'円</b> の振替が必要（いちばん少ないのは'+md(need.date)+'）'+(need.sec<need.need?'。証券の現金も足りません':'')+'</div>':'')+
+    (need?'<div class="need"><b>'+md(need.first)+'</b>に銀行がマイナスになります。'+need.month+'月を乗り切るには、証券から <b>'+num(need.need)+'円</b> の振替が必要（'+need.month+'月末の銀行：'+num(need.monthEnd)+'円）'+(need.sec<need.need?'。証券の現金も足りません':'')+'</div>':'')+
     '<div id="chart_bank"></div><div class="tip" id="tip_bank">タップでその日の残高</div>'+
     '<div class="chart-top" style="margin-top:12px"><span class="ctitle">合計（2口座）</span></div>'+
     '<div id="chart_total"></div><div class="tip" id="tip_total">タップでその日の残高（確認待ちは今日に計上）</div></div></div>';
