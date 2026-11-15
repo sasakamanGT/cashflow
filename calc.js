@@ -138,15 +138,26 @@
     if (T < base.date) T = base.date;
     var end = addMonths(T, (opts.maxYears || 30) * 12);
     var marks = data.marks || {};
-    var ev = [];
+    var ev = [], handled = {};
     Object.keys(marks).forEach(function (k) {
       var m = marks[k];
       if (m.status === 'done' && m.date > base.date) ev.push({ date: m.date, kind: 'actual', key: k, mark: m, amount: m.amount });
+      // 確定・スキップ済みの回は、あとで予定の日付を変えても同じ月（毎年なら同じ年）は二重に出さない
+      if (m.status === 'done' || m.status === 'skip') {
+        var p = k.split('|'), raw = p[1] || '';
+        handled[p[0] + '|M' + raw.slice(0, 7)] = handled[p[0] + '|Y' + raw.slice(0, 4)] = handled[p[0] + '|*'] = true;
+      }
     });
     (data.items || []).forEach(function (it) {
       occurrences(it, addDays(base0, 1), end).forEach(function (o) {
         var k = markKey(it, o.raw), m = marks[k];
         if (m && (m.status === 'done' || m.status === 'skip')) return;
+        if (!m) {
+          var r = it.repeat || 'none';
+          if (r === 'monthly' && handled[it.id + '|M' + o.raw.slice(0, 7)]) return;
+          if (r === 'yearly' && handled[it.id + '|Y' + o.raw.slice(0, 4)]) return;
+          if (r === 'none' && handled[it.id + '|*']) return;
+        }
         var eff = (m && m.status === 'moved') ? m.date : o.date;
         if (eff <= base0) return;
         var overdue = eff <= T;
