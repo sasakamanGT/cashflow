@@ -91,4 +91,3 @@ function seg(name,opts,val){
 function amtField(label,name,val){
   return '<div><div class="fl">'+label+'</div><div class="amtrow"><input type="text" class="amt" name="'+name+'" value="'+(val!=null&&val!==''?num(val):'')+'" autocomplete="off">'+(coarse?'':'<button type="button" class="kpbtn">テンキー</button>')+'</div><div class="amtv"></div></div>';
 }
- 
