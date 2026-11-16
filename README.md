@@ -6,6 +6,7 @@
 - データ：非公開リポジトリ sasakamanGT/cashflow-data の data.json（GitHub API で読み書き）
 - アクセストークン：fine-grained「cashflow-app」（cashflow-data の Contents 読み書きのみ）。各端末のアプリの設定画面で入力し、端末内（localStorage）だけに保存
 - **プログラムに実際の金額やトークンは書かない**
+- 次に作業するAIへの引き継ぎメモ（決めたことの理由・頼み方のルール・注意点）：[HANDOFF.md](HANDOFF.md)
 
 ## ファイル
 
@@ -94,7 +95,7 @@
 ## 新しいチャットで修正を頼むときの文例
 そのままコピーして、○○の部分を書き換えて使う。
 
-> https://github.com/sasakamanGT/cashflow のREADMEを読んでください。家計のキャッシュフローアプリです。
+> https://github.com/sasakamanGT/cashflow のREADMEとHANDOFF.mdを読んでください。家計のキャッシュフローアプリです。
 > ○○を△△に直したいです。直すのは ○○.js だけのはずなので、直したファイルを丸ごと渡してください。
 > プログラムに実際の金額やトークンは書かないでください。
 
