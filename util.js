@@ -3,7 +3,7 @@
 var OWNER='sasakamanGT', REPO='cashflow-data', FILE='data.json';
 var ACC={bank:'銀行',sec:'証券'};
 var data=null, sha=null, sim=null;
-var view={all:false, months:2};
+var view={months:2};
 var coarse = window.matchMedia && matchMedia('(pointer:coarse)').matches;
 var $=function(s,el){return (el||document).querySelector(s);};
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}

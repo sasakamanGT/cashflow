@@ -1,10 +1,5 @@
 // メイン画面（残高・月末残高・確認待ち・明細）
 'use strict';
-function horizonEnd(){
-  var t=CF.todayStr();
-  if(sim.depletion){var a=CF.addMonths(sim.depletion,2),b=CF.addMonths(t,3);return a>b?a:b;}
-  return CF.addMonths(t,24);
-}
 // 最初に銀行がマイナスになる月を、その月だけ乗り切るのに必要な振替額
 function transferNeed(){
   var t=sim.today, c=sim.current, first=c.bank<0?t:sim.bankNeg;
@@ -37,6 +32,9 @@ function render(){
     h+='<div class="me '+(lv==='ok'?'':lv)+'"><div class="l">'+CF.parse(me).m+'月末（銀行）</div><div class="v">'+yen(b.bank)+'</div><div class="s">合計 <span class="'+lvCls(b.total)+'">'+yen(b.total)+'</span></div></div>';
   }
   h+='</div></div>';
+  // 銀行が最初にマイナスになる月と、その月に必要な振替額
+  var need=transferNeed();
+  if(need)h+='<div class="sec need" style="padding-top:0"><b>'+md(need.first)+'</b>に銀行がマイナスになります。'+need.month+'月を乗り切るには、証券から <b>'+num(need.need)+'円</b> の振替が必要（'+need.month+'月末の銀行：'+num(need.monthEnd)+'円）'+(need.sec<need.need?'。証券の現金も足りません':'')+'</div>';
   // 確認待ち
   if(sim.overdue.length){
     h+='<div class="phead">確認待ち（'+sim.overdue.length+'件）　タップして実績確認</div>';
@@ -53,21 +51,17 @@ function render(){
   });
   if(sim.events.some(function(e){return e.date>until;})) h+='<button class="more" id="more">もう3か月表示</button>';
   // グラフ（銀行のみ・合計）
-  var need=transferNeed();
-  h+='<div class="sec"><div class="chartbox"><div class="chart-top"><span class="ctitle">銀行のみ</span><label class="chk" style="font-size:12px">全期間 <input type="checkbox" id="allChk" '+(view.all?'checked':'')+'></label></div>'+
-    (need?'<div class="need"><b>'+md(need.first)+'</b>に銀行がマイナスになります。'+need.month+'月を乗り切るには、証券から <b>'+num(need.need)+'円</b> の振替が必要（'+need.month+'月末の銀行：'+num(need.monthEnd)+'円）'+(need.sec<need.need?'。証券の現金も足りません':'')+'</div>':'')+
-    '<div id="chart_bank"></div><div class="tip" id="tip_bank">タップでその日の残高</div>'+
-    '<div class="chart-top" style="margin-top:14px"><span class="ctitle">合計（2口座）の年末残高</span></div>'+
+  // グラフ（合計（2口座）の年末残高）
+  h+='<div class="sec"><div class="chartbox"><div class="chart-top"><span class="ctitle">合計（2口座）の年末残高</span></div>'+
     '<div id="chart_total"></div></div></div>';
   m.innerHTML=h;
   m.querySelectorAll('[data-bal]').forEach(function(el){el.onclick=function(){openBalance();};});
-  if($('#allChk'))$('#allChk').onchange=function(){view.all=this.checked;render();};
   m.querySelectorAll('.row[data-k]').forEach(function(el){el.onclick=function(){
     var e=sim.events.filter(function(x){return x.key===el.dataset.k&&x.kind===el.dataset.kind;})[0];
     if(!e)return; if(e.kind==='actual')openActual(e.key); else openConfirm(e);
   };});
   if($('#more'))$('#more').onclick=function(){view.months+=3;render();};
-  drawChart('bank');drawYearly();
+  drawYearly();
 }
 function rowHtml(e,pend){
   var bal='<div class="bal">銀行 <span class="'+lvCls(e.bank)+'">'+num(e.bank)+'</span>　合計 <span class="'+lvCls(e.total)+'">'+num(e.total)+'</span></div>';
