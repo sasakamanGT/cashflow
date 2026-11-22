@@ -24,7 +24,7 @@ function openItem(it){
     o.date=date;o.name=$('[name=name]',ov).value.trim();o.amount=amt;o.repeat=g('repeat');
     o.until=o.repeat==='none'?'':$('[name=until]',ov).value;var sv=g('shift');o.shift=sv==='prev'?'prev':(sv==='next');
     var done=isNew&&g('mode')==='done', mark=null;
-    if(done){o.repeat='none';o.until='';o.shift=false;mark={status:'done',date:o.date,amount:o.amount,type:o.type,account:o.account,to:o.to,name:o.name};}
+    if(done){o.repeat='none';o.until='';o.shift=false;mark={status:'done',date:o.date,amount:o.amount,type:o.type,account:o.account,to:o.to,name:o.name,at:Date.now()};}
     commit((isNew?'add ':'edit ')+o.id,function(d){
       var i=d.items.findIndex(function(x){return String(x.id)===String(o.id);});
       if(i>=0)d.items[i]=copy(o);else d.items.push(copy(o));
@@ -65,7 +65,7 @@ function openBalance(rec){
     if(ref&&!isEdit&&(ref.bank!==b||ref.sec!==s)) msg='アプリの計算との差額：銀行 '+(b-ref.bank>=0?'+':'')+num(b-ref.bank)+'　証券 '+(s-ref.sec>=0?'+':'')+num(s-ref.sec)+'\n（確認漏れの入出金がないか見直してみてください）';
     commit('balance '+dt,function(d){
       d.balances=d.balances.filter(function(x){return x.date!==dt&&!(isEdit&&x.date===oldDate);});
-      d.balances.push({date:dt,bank:b,sec:s});
+      d.balances.push({date:dt,bank:b,sec:s,at:Date.now()});
     });
     if(msg)setTimeout(function(){alert(msg);},50);
   },function(ov,close){
@@ -92,7 +92,7 @@ function openConfirm(e){
     var dt=$('[name=adate]',ov).value,a=evalAmt($('[name=aamt]',ov).value);
     if(!dt){alert('実際の日付を入力してください');return false;}
     if(a===null||a<0){alert('実際の金額を入力してください');return false;}
-    setMark('confirm',{status:'done',date:dt,amount:a,type:it.type,account:it.account,to:it.to,name:it.name,itemId:it.id,raw:e.raw});
+    setMark('confirm',{status:'done',date:dt,amount:a,type:it.type,account:it.account,to:it.to,name:it.name,itemId:it.id,raw:e.raw,at:Date.now()});
   },function(ov,close){
     $('[data-s]',ov).textContent='確定';
     $('#skip',ov).onclick=function(){close();setMark('skip',{status:'skip',itemId:it.id,raw:e.raw,name:it.name});};

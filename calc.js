@@ -115,6 +115,11 @@
   }
   function latestBalance(data) { var b = sortedSnaps(data); return b.length ? b[b.length - 1] : null; }
   function markKey(item, raw) { return item.id + '|' + raw; }
+  // 実績が残高記録より後のものか（同じ日なら入力した時刻で判断。時刻がない古いデータは記録に含み済みとみなす）
+  function afterSnap(m, s) {
+    if (m.date !== s.date) return m.date > s.date;
+    return !!(m.at && s.at && m.at > s.at);
+  }
 
   // 指定日時点の実績残高（その日以前の最新の残高記録＋その後の確定実績）
   function actualAt(data, date) {
@@ -124,7 +129,7 @@
     var bank = s.bank, sec = s.sec, marks = data.marks || {};
     Object.keys(marks).forEach(function (k) {
       var m = marks[k];
-      if (m.status === 'done' && m.date > s.date && m.date <= date) { bank += signed(m, 'bank'); sec += signed(m, 'sec'); }
+      if (m.status === 'done' && afterSnap(m, s) && m.date <= date) { bank += signed(m, 'bank'); sec += signed(m, 'sec'); }
     });
     return { date: date, bank: bank, sec: sec, total: bank + sec, snap: s };
   }
@@ -141,7 +146,7 @@
     var ev = [], handled = {};
     Object.keys(marks).forEach(function (k) {
       var m = marks[k];
-      if (m.status === 'done' && m.date > base.date) ev.push({ date: m.date, kind: 'actual', key: k, mark: m, amount: m.amount });
+      if (m.status === 'done' && afterSnap(m, base)) ev.push({ date: m.date, kind: 'actual', key: k, mark: m, amount: m.amount });
       // 確定・スキップ済みの回は、あとで予定の日付を変えても同じ月（毎年なら同じ年）は二重に出さない
       if (m.status === 'done' || m.status === 'skip') {
         var p = k.split('|'), raw = p[1] || '';
