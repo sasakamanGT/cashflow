@@ -124,7 +124,9 @@ function openList(){
     return '<div class="lrow" data-id="'+esc(it.id)+'"><span>'+esc(it.name||'（無題）')+' <span class="x">'+accName(it)+'・'+rp+(it.until?'（〜'+md(it.until)+'）':'')+'</span></span><span>'+sign+num(it.amount)+'</span></div>';
   }
   var rep=data.items.filter(function(x){return x.repeat&&x.repeat!=='none';});
-  var one=data.items.filter(function(x){return !x.repeat||x.repeat==='none';}).sort(function(a,b){return a.date<b.date?1:-1;});
+  // 確定・スキップ済みの単発の予定は、予定の欄には出さない（確定したものは「確定した実績」の欄に出る）
+  var settled={};Object.keys(data.marks).forEach(function(k){var st=data.marks[k].status;if(st==='done'||st==='skip')settled[k.split('|')[0]]=true;});
+  var one=data.items.filter(function(x){return (!x.repeat||x.repeat==='none')&&!settled[x.id];}).sort(function(a,b){return a.date<b.date?1:-1;});
   var bal=data.balances.slice().sort(function(a,b){return a.date<b.date?1:-1;});
   var mk=Object.keys(data.marks).map(function(k){return {k:k,m:data.marks[k]};}).filter(function(x){return x.m.status==='done';}).sort(function(a,b){return a.m.date<b.m.date?1:-1;}).slice(0,100);
   var body='<h3>繰り返しの予定（'+rep.length+'）</h3><div>'+rep.map(line).join('')+'</div>'+
