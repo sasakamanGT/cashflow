@@ -57,8 +57,8 @@ function render(){
   h+='<div class="sec"><div class="chartbox"><div class="chart-top"><span class="ctitle">銀行のみ</span><label class="chk" style="font-size:12px">全期間 <input type="checkbox" id="allChk" '+(view.all?'checked':'')+'></label></div>'+
     (need?'<div class="need"><b>'+md(need.first)+'</b>に銀行がマイナスになります。'+need.month+'月を乗り切るには、証券から <b>'+num(need.need)+'円</b> の振替が必要（'+need.month+'月末の銀行：'+num(need.monthEnd)+'円）'+(need.sec<need.need?'。証券の現金も足りません':'')+'</div>':'')+
     '<div id="chart_bank"></div><div class="tip" id="tip_bank">タップでその日の残高</div>'+
-    '<div class="chart-top" style="margin-top:12px"><span class="ctitle">合計（2口座）</span></div>'+
-    '<div id="chart_total"></div><div class="tip" id="tip_total">タップでその日の残高（確認待ちは今日に計上）</div></div></div>';
+    '<div class="chart-top" style="margin-top:14px"><span class="ctitle">合計（2口座）の年末残高</span></div>'+
+    '<div id="chart_total"></div></div></div>';
   m.innerHTML=h;
   m.querySelectorAll('[data-bal]').forEach(function(el){el.onclick=function(){openBalance();};});
   if($('#allChk'))$('#allChk').onchange=function(){view.all=this.checked;render();};
@@ -67,7 +67,7 @@ function render(){
     if(!e)return; if(e.kind==='actual')openActual(e.key); else openConfirm(e);
   };});
   if($('#more'))$('#more').onclick=function(){view.months+=3;render();};
-  drawChart('bank');drawChart('total');
+  drawChart('bank');drawYearly();
 }
 function rowHtml(e,pend){
   var bal='<div class="bal">銀行 <span class="'+lvCls(e.bank)+'">'+num(e.bank)+'</span>　合計 <span class="'+lvCls(e.total)+'">'+num(e.total)+'</span></div>';
