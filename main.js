@@ -32,9 +32,9 @@ function render(){
     h+='<div class="me '+(lv==='ok'?'':lv)+'"><div class="l">'+CF.parse(me).m+'月末（銀行）</div><div class="v">'+yen(b.bank)+'</div><div class="s">合計 <span class="'+lvCls(b.total)+'">'+yen(b.total)+'</span></div></div>';
   }
   h+='</div></div>';
-  // 銀行が最初にマイナスになる月と、その月に必要な振替額
+  // 銀行が最初にマイナスになる日と、その月でいちばん少ない銀行残高
   var need=transferNeed();
-  if(need)h+='<div class="sec need" style="padding-top:0"><b>'+md(need.first)+'</b>に銀行がマイナスになります。'+need.month+'月を乗り切るには、証券から <b>'+num(need.need)+'円</b> の振替が必要（'+need.month+'月末の銀行：'+num(need.monthEnd)+'円）'+(need.sec<need.need?'。証券の現金も足りません':'')+'</div>';
+  if(need)h+='<div class="sec need" style="padding-top:0"><b>'+md(need.first)+'</b>に銀行がマイナスになります。（銀行：<b>'+num(need.low.bank)+'円</b>）</div>';
   // 確認待ち
   if(sim.overdue.length){
     h+='<div class="phead">確認待ち（'+sim.overdue.length+'件）　タップして実績確認</div>';
