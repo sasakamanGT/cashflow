@@ -71,5 +71,5 @@ function rowHtml(e,pend){
   var st=e.kind==='actual'?'<span class="tag done">実績</span>':(pend?'':'<span class="tag plan">予定</span>');
   var rep=e.kind==='plan'&&e.item.repeat&&e.item.repeat!=='none'?' ↻':'';
   var d=pend?md(e.sched):md(e.date);
-  return '<div class="row '+(pend?'pend':(e.kind==='actual'?'done':''))+'" data-k="'+esc(e.key)+'" data-kind="'+e.kind+'"><span class="d">'+d+'</span><span class="n"><div class="nm">'+(e.kind==='actual'?'✓ ':'')+esc(src.name||'（無題）')+rep+tag+st+'</div></span><span><div class="a '+cls+'">'+sign+num(e.amount)+'</div>'+(pend?'':bal)+'</span></div>';
+  return '<div class="row '+(pend?'pend':(e.kind==='actual'?'done'+(e.date===sim.today?' today':''):''))+'" data-k="'+esc(e.key)+'" data-kind="'+e.kind+'"><span class="d">'+d+'</span><span class="n"><div class="nm">'+(e.kind==='actual'?'✓ ':'')+esc(src.name||'（無題）')+rep+tag+st+'</div></span><span><div class="a '+cls+'">'+sign+num(e.amount)+'</div>'+(pend?'':bal)+'</span></div>';
 }
