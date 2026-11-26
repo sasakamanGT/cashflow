@@ -42,7 +42,8 @@ function render(){
   }
   // 明細（実績＋予定）
   var until=CF.monthEnd(CF.addMonths(t.slice(0,8)+'01',view.months-1)), cur='';
-  var ev=sim.events.filter(function(e){return e.date<=until&&!(e.kind==='plan'&&e.overdue);});
+  // 日付が過ぎた実績はメイン画面に出さない（計算には入っている。一覧で見られる）
+  var ev=sim.events.filter(function(e){return e.date<=until&&!(e.kind==='plan'&&e.overdue)&&!(e.kind==='actual'&&e.date<t);});
   if(!ev.length&&!sim.overdue.length) h+='<div class="empty">予定がありません。右下の＋から追加してください。</div>';
   ev.forEach(function(e){
     var mk=e.date.slice(0,7);
